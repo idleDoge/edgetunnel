@@ -386,15 +386,17 @@ export default {
 								// 可用 BESTIP_USE_MEASURED=0 关闭回到纯随机；数量用 BESTIP_TOPK（默认10）。
 								if (!['0', 'false'].includes(env.BESTIP_USE_MEASURED)) {
 									try {
-										const { selectTopK } = await import('./bestip/src/orchestrator.js');
+										const { selectTopKFallback } = await import('./bestip/src/worker-bridge.js');
 										const 来源ISP = 识别运营商(request); // cmcc/ct/cu/cf 自动判断
-										const topList = await selectTopK(env.KV,
-											{ kind: 'entry', isp: 来源ISP },
-											{ k: Number(env.BESTIP_TOPK) || 10, minScore: Number(env.BESTIP_MIN_SCORE) || 15 });
+										const { items: topList, isp: 命中ISP } = await selectTopKFallback(env.KV, {
+											kind: 'entry', isp: 来源ISP,
+											k: Number(env.BESTIP_TOPK) || 10,
+											minScore: Number(env.BESTIP_MIN_SCORE) || 15,
+										});
 										for (const t of topList) {
 											优选IP.push(`${t.key}#实测优选 ${t.score}分 ${t.rttMs}ms`);
 										}
-										if (topList.length) log(`[优选订阅] ${来源ISP} 前置 ${topList.length} 个实测节点`);
+										if (topList.length) log(`[优选订阅] 来源${来源ISP} 命中${命中ISP} 前置 ${topList.length} 个实测节点`);
 									} catch { /* 无实测数据时忽略 */ }
 								}
 								for (const 元素 of 完整优选列表) {

@@ -4,7 +4,9 @@
  * 把运行时的 request.fetcher.connect、env.KV 桥接到优选编排器，
  * 并负责获取 CIDR 列表。供 scheduled（定时）与手动触发共用。
  */
-import { runOptimization, selectBest, reportOutcome } from './orchestrator.js';
+import {
+	runOptimization, selectBest, reportOutcome, selectTopK,
+} from './orchestrator.js';
 
 /** 兜底 CF 网段（远程 CIDR 拉取失败时使用） */
 const FALLBACK_CIDR = ['104.16.0.0/13'];
@@ -79,3 +81,28 @@ export async function scheduledRun({ request, env, isp = 'cf', kinds = ['entry',
 }
 
 export { selectBest, reportOutcome };
+
+/**
+ * 跨运营商回退的 top-K 选择：
+ * 先取访问者 isp 桶；若为空（如服务器侧/经转发时识别成 cf），
+ * 按 fallbackISPs 顺序回退到其它有实测数据的桶。
+ *
+ * 这样国内真实用户精确命中自己运营商，其它情况下仍有实测节点可用。
+ *
+ * @returns {Promise<{items: Array, isp: string}>}
+ */
+export async function selectTopKFallback(kv, {
+	kind = 'entry', isp = 'cf', k = 10, minScore = 15,
+	fallbackISPs = ['cmcc', 'ct', 'cu', 'cf'],
+} = {}) {
+	const order = [isp, ...fallbackISPs.filter((x) => x !== isp)];
+	const seen = new Set();
+	for (const candidateISP of order) {
+		if (seen.has(candidateISP)) continue;
+		seen.add(candidateISP);
+		// eslint-disable-next-line no-await-in-loop
+		const items = await selectTopK(kv, { kind, isp: candidateISP }, { k, minScore });
+		if (items.length) return { items, isp: candidateISP };
+	}
+	return { items: [], isp };
+}
