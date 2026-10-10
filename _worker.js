@@ -382,13 +382,19 @@ export default {
 									await 生成随机IP(request, config_JSON.优选订阅生成.本地IP库.随机数量, config_JSON.优选订阅生成.本地IP库.指定端口)
 								)[0];
 								const 优选API = [], 优选IP = [], 其他节点 = [];
-								// 实测优选：把定时拨测得的高质量节点前置（低延迟+稳定优先）。
-								// 可用 BESTIP_USE_MEASURED=0 关闭回到纯随机。
+								// 实测优选：按访问者来源运营商，前置实测存活的 top-K 节点（低延迟+稳定）。
+								// 可用 BESTIP_USE_MEASURED=0 关闭回到纯随机；数量用 BESTIP_TOPK（默认10）。
 								if (!['0', 'false'].includes(env.BESTIP_USE_MEASURED)) {
 									try {
-										const { selectBest } = await import('./bestip/src/worker-bridge.js');
-										const top = await selectBest(env.KV, { kind: 'entry', minScore: Number(env.BESTIP_MIN_SCORE) || 20 });
-										if (top) 优选IP.push(`${top.key}#实测优选 ${top.score}分`);
+										const { selectTopK } = await import('./bestip/src/orchestrator.js');
+										const 来源ISP = 识别运营商(request); // cmcc/ct/cu/cf 自动判断
+										const topList = await selectTopK(env.KV,
+											{ kind: 'entry', isp: 来源ISP },
+											{ k: Number(env.BESTIP_TOPK) || 10, minScore: Number(env.BESTIP_MIN_SCORE) || 15 });
+										for (const t of topList) {
+											优选IP.push(`${t.key}#实测优选 ${t.score}分 ${t.rttMs}ms`);
+										}
+										if (topList.length) log(`[优选订阅] ${来源ISP} 前置 ${topList.length} 个实测节点`);
 									} catch { /* 无实测数据时忽略 */ }
 								}
 								for (const 元素 of 完整优选列表) {

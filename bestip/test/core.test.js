@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
 	decayFactor, summarize, scoreNode, rankNodes,
-	mergeObservations, pickTop, HALF_LIFE_MS,
+	mergeObservations, pickTop, pickTopK, HALF_LIFE_MS,
 } from '../src/core.js';
 
 const NOW = 1_800_000_000_000;
@@ -87,4 +87,26 @@ test('pickTop: 返回达到阈值的最佳节点', () => {
 	const ranked = rankNodes([{ key: 'g', observations: good }], { now: NOW });
 	assert.ok(pickTop(ranked));
 	assert.equal(pickTop(ranked).key, 'g');
+});
+
+test('pickTopK: 返回多个实测存活节点并按分排序', () => {
+	const nodes = [
+		{ key: 'a:443', observations: Array.from({ length: 8 }, () => ({ rttMs: 50, ok: true, at: NOW })) },
+		{ key: 'b:443', observations: Array.from({ length: 8 }, () => ({ rttMs: 90, ok: true, at: NOW })) },
+		{ key: 'c:443', observations: [{ rttMs: null, ok: false, at: NOW }] },
+	];
+	const ranked = rankNodes(nodes, { limit: 20, now: NOW });
+	const k = pickTopK(ranked, { k: 10, minScore: 15 });
+	assert.equal(k.length, 2, '只含存活的 a/b，不含失败的 c');
+	assert.equal(k[0].key, 'a:443', '低分延迟在前');
+	assert.equal(k[0].rttMs, 50);
+});
+
+test('pickTopK: 受 k 限制', () => {
+	const nodes = Array.from({ length: 5 }, (_, i) => ({
+		key: `10.0.0.${i}:443`,
+		observations: Array.from({ length: 8 }, () => ({ rttMs: 50 + i, ok: true, at: NOW })),
+	}));
+	const ranked = rankNodes(nodes, { limit: 20, now: NOW });
+	assert.equal(pickTopK(ranked, { k: 3 }).length, 3);
 });

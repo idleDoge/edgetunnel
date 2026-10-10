@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runOptimization, selectBest, reportOutcome } from '../src/orchestrator.js';
+import { runOptimization, selectBest, reportOutcome, selectTopK, ingestResults } from '../src/orchestrator.js';
 
 function memKV() {
 	const m = new Map();
@@ -80,4 +80,17 @@ test('runOptimization: 缺依赖应报错', async () => {
 	await assert.rejects(() => runOptimization({
 		connect: makeConnect(), kv: null, cidrs: ['10.0.0.0/24'],
 	}), /missing kv/);
+});
+
+test('isp 维度：selectTopK 只读到对应运营商桶', async () => {
+	const kv = memKV();
+	await ingestResults(kv, [{
+		key: '1.1.1.1:443',
+		observation: { rttMs: 40, ok: true, at: Date.now() },
+	}], { kind: 'entry', isp: 'cmcc' });
+
+	assert.equal(await selectBest(kv, { kind: 'entry', isp: 'ct' }), null, 'ct 桶应为空');
+	const cmcc = await selectTopK(kv, { kind: 'entry', isp: 'cmcc' }, { k: 5 });
+	assert.equal(cmcc.length, 1);
+	assert.equal(cmcc[0].key, '1.1.1.1:443');
 });

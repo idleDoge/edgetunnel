@@ -156,3 +156,19 @@ export function pickTop(ranked, { minScore = 20, requireRtt = true } = {}) {
 	}
 	return null;
 }
+
+/**
+ * 选出实测存活的前 K 个节点（订阅前置多个，而非单个）。
+ * 仅返回 meanRtt 非空（确认可用）且分数达标的节点。
+ * 返回 [{ key, score, rttMs }]。
+ */
+export function pickTopK(ranked, { k = 10, minScore = 15 } = {}) {
+	const out = [];
+	for (const r of ranked) {
+		if (r.score < minScore) continue;
+		if (r.stats.meanRtt === null) continue;
+		out.push({ key: r.key, score: r.score, rttMs: Math.round(r.stats.meanRtt) });
+		if (out.length >= k) break;
+	}
+	return out;
+}
