@@ -1,4 +1,4 @@
-name = "v20251104"
+name = "luoyaze-edgetunnel"
 main = "_worker.js"
 compatibility_date = "2025-11-04"
 keep_vars = true
@@ -7,6 +7,7 @@ keep_vars = true
 [triggers]
 crons = ["*/20 * * * *"]
 
-#[[kv_namespaces]]
-#binding = "KV"			#KV绑定名默认不可修改
-#id = ""				#KV数据库id
+# 与 Pages 项目 luoyaze 共用同一 KV，保证订阅/优选数据一致
+[[kv_namespaces]]
+binding = "KV"
+id = "3178b939bc05409098da2ce2cca5aaac"
