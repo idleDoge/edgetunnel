@@ -1,13 +1,12 @@
-name = "luoyaze-edgetunnel"
+name = "edgetunnel"
 main = "_worker.js"
 compatibility_date = "2025-11-04"
 keep_vars = true
 
-# 定时优选（每 20 分钟一轮，探测 -> 评分 -> 刷新 KV）
-[triggers]
-crons = ["*/20 * * * *"]
-
-# 与 Pages 项目 luoyaze 共用同一 KV，保证订阅/优选数据一致
+# Worker 独立配置，避免实验影响 Pages 保底订阅
 [[kv_namespaces]]
 binding = "KV"
-id = "3178b939bc05409098da2ce2cca5aaac"
+id = "42f52b7b37184a96b1e877d1d54d3d3a"
+
+[vars]
+HOST = "edt-worker.luoyaze.com"

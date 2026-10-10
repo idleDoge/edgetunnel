@@ -1,4 +1,4 @@
-﻿const Version = '2026-10-08 22:23:27';
+const Version = '2026-10-08 22:23:27';
 let config_JSON, 缓存SOCKS5白名单 = null, 调试日志打印 = false;
 let SOCKS5白名单 = ['*tapecontent.net', '*cloudatacdn.com', '*loadshare.org', '*cdn-centaurus.com', 'scholar.google.com'];
 const Pages静态页面 = 'https://edt-pages.github.io', EDT_版本号 = Number(String(Version).replace(/\D+/g, ''));
@@ -16,18 +16,6 @@ const 特征码字典 = [
 const 汇聚订阅_UA = 'v2rayN/edge' + 'tunnel (https://github.com/' + 特征码字典[1] + '/edge' + 'tunnel)';
 ///////////////////////////////////////////////////////主程序入口///////////////////////////////////////////////
 export default {
-	async scheduled(event, env, ctx) {
-		// 定时优选（入口节点 + 反代出口）。失败不抛出以免 Cron 反复重试刷屏，仅记录。
-		ctx.waitUntil((async () => {
-			try {
-				const { scheduledRun } = await import('./bestip/src/worker-bridge.js');
-				const isp = ['1', 'true'].includes(env.BESTIP_CMCC) ? 'cmcc' : 'cf';
-				await scheduledRun({ env, isp, kinds: ['entry', 'proxy'] });
-			} catch (e) {
-				console.log(`[bestip] scheduled error: ${e?.message || e}`);
-			}
-		})());
-	},
 	async fetch(request, env, ctx) {
 		let 请求URL文本 = request.url.replace(/%5[Cc]/g, '').replace(/\\/g, '');
 		const 请求URL锚点索引 = 请求URL文本.indexOf('#');
@@ -147,16 +135,6 @@ export default {
 							}
 						}
 						return new Response(JSON.stringify({ success: false, data: [] }, null, 2), { status: 403, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
-					} else if (访问路径 === 'admin/bestip-run') {// 手动触发一轮优选（需已登录）
-						try {
-							const { scheduledRun } = await import('./bestip/src/worker-bridge.js');
-							const isp = url.searchParams.get('isp') || (['1', 'true'].includes(env.BESTIP_CMCC) ? 'cmcc' : 'cf');
-							const kinds = url.searchParams.get('kind') ? [url.searchParams.get('kind')] : ['entry', 'proxy'];
-							const summary = await scheduledRun({ request, env, isp, kinds });
-							return new Response(JSON.stringify({ success: true, isp, summary }), { headers: { 'Content-Type': 'application/json;charset=utf-8' } });
-						} catch (e) {
-							return new Response(JSON.stringify({ success: false, error: String(e?.message || e) }), { status: 500, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
-						}
 					} else if (访问路径 === 'admin/check') {// 代理检查
 						const 代理协议 = ['socks5', 'http', 'https', 'turn', 'sstp'].find(类型 => url.searchParams.has(类型)) || null;
 						if (!代理协议) return new Response(JSON.stringify({ error: '缺少代理参数' }), { status: 400, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
@@ -382,23 +360,6 @@ export default {
 									await 生成随机IP(request, config_JSON.优选订阅生成.本地IP库.随机数量, config_JSON.优选订阅生成.本地IP库.指定端口)
 								)[0];
 								const 优选API = [], 优选IP = [], 其他节点 = [];
-								// 实测优选：按访问者来源运营商，前置实测存活的 top-K 节点（低延迟+稳定）。
-								// 可用 BESTIP_USE_MEASURED=0 关闭回到纯随机；数量用 BESTIP_TOPK（默认10）。
-								if (!['0', 'false'].includes(env.BESTIP_USE_MEASURED)) {
-									try {
-										const { selectTopKFallback } = await import('./bestip/src/worker-bridge.js');
-										const 来源ISP = 识别运营商(request); // cmcc/ct/cu/cf 自动判断
-										const { items: topList, isp: 命中ISP } = await selectTopKFallback(env.KV, {
-											kind: 'entry', isp: 来源ISP,
-											k: Number(env.BESTIP_TOPK) || 10,
-											minScore: Number(env.BESTIP_MIN_SCORE) || 15,
-										});
-										for (const t of topList) {
-											优选IP.push(`${t.key}#实测优选 ${t.score}分 ${t.rttMs}ms`);
-										}
-										if (topList.length) log(`[优选订阅] 来源${来源ISP} 命中${命中ISP} 前置 ${topList.length} 个实测节点`);
-									} catch { /* 无实测数据时忽略 */ }
-								}
 								for (const 元素 of 完整优选列表) {
 									if (元素.toLowerCase().startsWith('sub://')) {
 										优选API.push(元素);
@@ -2443,7 +2404,7 @@ async function forwardataTCP(host, portNum, rawData, ws, respHeader, remoteConnW
 					}
 				} else {
 					log(`[反代连接] 代理到: ${host}:${portNum}`);
-					const 所有反代数组 = await 解析地址端口(ctx反代IP, host, yourUUID, env.KV);
+					const 所有反代数组 = await 解析地址端口(ctx反代IP, host, yourUUID);
 					newSocket = await connectProxyIP(`${特征码字典[0]}.tp1.${特征码字典[2]}.xyz`, 1, 本次首包数据, 所有反代数组, ctx反代兜底);
 				}
 				await 安装当前连接(newSocket, 当前连接世代, downlinkDrain);
@@ -6476,7 +6437,7 @@ function sha224(s) {
 	return hex;
 }
 
-async function 解析地址端口(proxyIP, 目标域名 = 'dash.cloudflare.com', UUID = '00000000-0000-4000-8000-000000000000', kv = null) {
+async function 解析地址端口(proxyIP, 目标域名 = 'dash.cloudflare.com', UUID = '00000000-0000-4000-8000-000000000000') {
 	proxyIP = proxyIP.toLowerCase();
 	function 解析地址端口字符串(str) {
 		let 地址 = str, 端口 = 443;
@@ -6555,19 +6516,7 @@ async function 解析地址端口(proxyIP, 目标域名 = 'dash.cloudflare.com',
 	let 随机种子 = [...(目标根域名 + UUID)].reduce((a, c) => a + c.charCodeAt(0), 0);
 	log(`[反代解析] 随机种子: ${随机种子}\n目标站点: ${目标根域名}`)
 	const 洗牌后 = [...排序后数组].sort(() => (随机种子 = (随机种子 * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff - 0.5);
-	// 实测反代优选：把定时拨测得的高质量反代节点前置（proxy kind）。
-	let 实测反代 = [];
-	if (kv) {
-		try {
-			const { selectBest } = await import('./bestip/src/worker-bridge.js');
-			const top = await selectBest(kv, { kind: 'proxy', minScore: 20 });
-			if (top) {
-				const parts = top.key.match(/^(\[[\da-fA-F:]+\]|[\d.]+):(\d+)$/);
-				if (parts) 实测反代 = [[parts[1], Number(parts[2])]];
-			}
-		} catch { /* ignore */ }
-	}
-	const 解析结果 = [...实测反代, ...洗牌后].slice(0, 8);
+	const 解析结果 = 洗牌后.slice(0, 8);
 	log(`[反代解析] 解析完成 总数: ${解析结果.length}个\n${解析结果.map(([ip, port], index) => `${index + 1}. ${ip}:${port}`).join('\n')}`);
 	return 解析结果;
 }

@@ -29,6 +29,15 @@
 ---
 
 ## 💡 快速部署
+
+### 本 fork 的使用边界
+
+本 fork 保留上游转发和原生订阅生成逻辑。`bestip/` 是历史实验目录，未接入生产 Worker；TCP 建连结果不能作为真实转发成功的依据，也不通过 Worker Cron 测试客户端入口质量。
+
+优选先使用面板原生自定义地址、`ADD.txt` 或外部优选源。候选必须使用目标服务的真实订阅参数，在使用线路上验证协议认证和完整 HTTPS 转发；入口地址与 `PROXYIP` 分别处理。关闭随机 IP 并配置 `ADD.txt` 后，更新订阅会读取当前地址列表，不会自动重新测速。
+
+本仓库的 `wrangler.toml` 指向既有 `edgetunnel` Worker 与独立 KV。Pages 保底部署使用自己的 KV；新 Worker 的配置调整不影响 Pages。自动部署前应核对目标名称、绑定和自定义域名。
+
 >[!TIP]
 > 📖 **详尽图文教程**：[edgetunnel 部署指南](https://cmliussss.com/p/edt2/)
 
