@@ -1,0 +1,10 @@
+{
+  "name": "edgetunnel-bestip",
+  "version": "0.1.0",
+  "description": "Measured IP optimization (probe -> score -> select) for edgetunnel",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/"
+  }
+}
